@@ -46,19 +46,9 @@ TEMPLATE_EXAMPLE = ["G6440M-3", "男士运动鞋/休闲鞋", "41-45", "弹性针
 
 
 # ---------------------------------------------------------------- 配置：API Key
-def get_secret(name, default=""):
-    """读取配置：优先 Streamlit Secrets（部署用），再环境变量。"""
-    try:
-        if name in st.secrets:
-            return str(st.secrets[name]).strip()
-    except Exception:
-        pass
-    return os.environ.get(name, default).strip()
-
-
 def load_api_key():
-    """优先级：Streamlit Secrets / 环境变量 DASHSCOPE_API_KEY > 同目录 config.json"""
-    key = get_secret("DASHSCOPE_API_KEY")
+    """优先级：环境变量 DASHSCOPE_API_KEY > 同目录 config.json"""
+    key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
     if key:
         return key
     cfg = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -69,25 +59,6 @@ def load_api_key():
         except Exception:
             return ""
     return ""
-
-
-def check_login():
-    """简单登录闸：若在 Secrets/环境变量里设了 APP_PASSWORD，则要求输入密码。
-    没设密码则不拦截（方便本地使用）。"""
-    expected = get_secret("APP_PASSWORD")
-    if not expected:
-        return True
-    if st.session_state.get("authed"):
-        return True
-    st.markdown("### 🔒 请输入访问密码")
-    pwd = st.text_input("访问密码", type="password", label_visibility="collapsed")
-    if st.button("进入"):
-        if pwd == expected:
-            st.session_state["authed"] = True
-            st.rerun()
-        else:
-            st.error("密码错误，请重试。")
-    return False
 
 
 # ---------------------------------------------------------------- 健壮地读 xlsx
@@ -438,23 +409,15 @@ def process_one(client, model, p, kws, n_cand, min_chars, max_chars):
 
 # ================================================================ Streamlit 界面
 st.set_page_config(page_title="OZON 标签&简述生成工具", page_icon="🛒", layout="wide")
-
-if not check_login():
-    st.stop()
-
 st.title("🛒 OZON 关键词标签 & 产品简述生成工具")
 st.caption("本地填表 → 自动生成俄语 #标签 和简述 → 人工审核后粘贴到 OZON 后台（v1 不接 OZON API）")
 
 with st.sidebar:
     st.header("⚙️ 设置")
-    server_key = load_api_key()
-    if server_key:
-        api_key = server_key
-        st.success("API Key 已由服务器配置 ✅")
-    else:
-        api_key = st.text_input("阿里云百炼 API Key (sk-开头)", type="password",
-                                help="本地使用时填写；部署到服务器后由 Secrets 提供，无需填写。")
-        api_key = (api_key or "").strip()
+    api_key = st.text_input("阿里云百炼 API Key (sk-开头)", value=load_api_key(),
+                            type="password",
+                            help="也可放到环境变量 DASHSCOPE_API_KEY 或同目录 config.json，免每次输入。")
+    api_key = (api_key or "").strip()
     model = st.selectbox("生成模型",
                          ["qwen-plus", "qwen-max", "qwen3-max", "qwen-flash"],
                          index=0,
